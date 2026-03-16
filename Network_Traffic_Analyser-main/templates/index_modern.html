@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Traffic Analysis - Modern UI</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        :root[data-theme="dark"] {
+            --bg: #0f172a;
+            --panel: rgba(30, 41, 59, 0.6);
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --border: rgba(148,163,184,0.15);
+            --accent: #60a5fa;
+            --accent-weak: rgba(59,130,246,0.08);
+            --card-gradient: linear-gradient(180deg, rgba(2,6,23,0.6), rgba(2,6,23,0.3));
+            --link: #93c5fd;
+        }
+        :root[data-theme="light"] {
+            --bg: #f8fafc;
+            --panel: #ffffffcc;
+            --text: #0f172a;
+            --muted: #475569;
+            --border: rgba(15,23,42,0.1);
+            --accent: #2563eb;
+            --accent-weak: rgba(37,99,235,0.08);
+            --card-gradient: linear-gradient(180deg, #ffffff, #f8fafc);
+            --link: #1d4ed8;
+        }
+        html { color-scheme: light dark; }
+        body { font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); }
+        .container-xxl { max-width: 1200px; }
+        .glass { background: var(--panel); backdrop-filter: blur(8px); border: 1px solid var(--border); border-radius: 16px; }
+        .header-hero { background: radial-gradient(1200px 200px at 50% -50px, color-mix(in oklab, var(--accent) 25%, transparent), transparent), radial-gradient(1000px 200px at 10% -100px, rgba(236,72,153,.20), transparent), radial-gradient(800px 200px at 90% -80px, rgba(34,197,94,.20), transparent); border-bottom: 1px solid var(--border); }
+        .dropzone { border: 2px dashed color-mix(in oklab, var(--muted) 30%, transparent); border-radius: 12px; padding: 28px; text-align: center; transition: all .2s; cursor: pointer; }
+        .dropzone.dragover { border-color: var(--accent); background: var(--accent-weak); }
+        .muted { color: var(--muted); }
+        .metric-card { border-radius: 12px; border: 1px solid var(--border); background: var(--card-gradient); }
+        .metric-label { color: var(--muted); font-size: .85rem; }
+        .metric-value { font-size: 1.75rem; font-weight: 700; letter-spacing: .3px; }
+        .tab-btn { color: var(--muted); border: 1px solid var(--border); background: transparent; }
+        .tab-btn.active { color: var(--text); background: color-mix(in oklab, var(--muted) 10%, transparent); border-color: color-mix(in oklab, var(--border) 70%, transparent); }
+        .table-container { overflow-x: auto; }
+        .viz-img { max-width: 100%; border-radius: 12px; border: 1px solid var(--border); }
+        a { color: var(--link); }
+        .toggle { border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 999px; padding: 6px 12px; }
+    </style>
+    <link rel="preload" as="image" href="/static/placeholder.png">
+</head>
+<body>
+    <div class="header-hero py-5 mb-4">
+        <div class="container-xxl">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h1 class="fw-bold" style="letter-spacing: .3px;">Network Traffic Analysis</h1>
+                    <div class="muted">Upload CSV to extract features, train model, and view insights.</div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button id="themeToggle" class="toggle">Toggle Theme</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-xxl">
+        <div class="glass p-4 mb-4">
+            <div id="dropzone" class="dropzone">
+                <input id="fileInput" type="file" accept=".csv" class="d-none">
+                <div class="mb-2"><strong>Drag & drop</strong> your CSV here, or <a href="#" id="browseLink">browse</a></div>
+                <div class="muted small">Supported: NIDS or raw traffic CSV</div>
+            </div>
+            <div class="d-grid mt-3">
+                <button id="processBtn" class="btn btn-primary" disabled>Upload & Process</button>
+            </div>
+            <div id="progress" class="mt-3" style="display:none;">
+                <div class="muted small">Processing...</div>
+                <div class="progress" role="progressbar" aria-label="processing" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="metrics" class="row g-3 mb-4" style="display:none;">
+            <div class="col-sm-6 col-lg-3">
+                <div class="metric-card p-3">
+                    <div class="metric-label">Model Accuracy</div>
+                    <div id="metricAccuracy" class="metric-value">—</div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <div class="metric-card p-3">
+                    <div class="metric-label">Features</div>
+                    <div id="metricFeatureCount" class="metric-value">—</div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <div class="metric-card p-3">
+                    <div class="metric-label">Rows</div>
+                    <div id="metricRowCount" class="metric-value">—</div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <div class="metric-card p-3">
+                    <div class="metric-label">Anomalies (est.)</div>
+                    <div id="metricAnomalies" class="metric-value">—</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-3 d-flex gap-2">
+            <button class="btn tab-btn active" data-tab="charts" disabled>Charts</button>
+            <button class="btn tab-btn" data-tab="preview" disabled>Data Preview</button>
+        </div>
+
+        <div id="tab-charts" class="glass p-4 mb-4" style="display:block;">
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <h6 class="muted">Feature Sums</h6>
+                    <canvas id="sumsChart" height="200"></canvas>
+                </div>
+                <div class="col-lg-6">
+                    <h6 class="muted">Feature Importance</h6>
+                    <img id="importanceImg" class="viz-img" alt="Feature Importance" />
+                </div>
+                <div class="col-12">
+                    <h6 class="muted">Correlation Heatmap</h6>
+                    <img id="heatmapImg" class="viz-img" alt="Correlation Heatmap" />
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-preview" class="glass p-4 mb-5" style="display:none;">
+            <div class="table-container" id="previewHtml"></div>
+        </div>
+    </div>
+
+    <script>
+        // Theme handling
+        const root = document.documentElement;
+        const themeToggle = document.getElementById('themeToggle');
+        function getTheme() {
+            return localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        }
+        function setTheme(theme) {
+            root.setAttribute('data-theme', theme);
+            localStorage.setItem('theme', theme);
+        }
+        function getVar(name) { return getComputedStyle(root).getPropertyValue(name).trim(); }
+
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const browseLink = document.getElementById('browseLink');
+        const processBtn = document.getElementById('processBtn');
+        const progress = document.getElementById('progress');
+        const metrics = document.getElementById('metrics');
+        const sumsChartEl = document.getElementById('sumsChart');
+        const importanceImg = document.getElementById('importanceImg');
+        const heatmapImg = document.getElementById('heatmapImg');
+        const previewHtml = document.getElementById('previewHtml');
+        const tabButtons = document.querySelectorAll('.tab-btn');
+        const tabCharts = document.getElementById('tab-charts');
+        const tabPreview = document.getElementById('tab-preview');
+        const metricAccuracy = document.getElementById('metricAccuracy');
+        const metricFeatureCount = document.getElementById('metricFeatureCount');
+        const metricRowCount = document.getElementById('metricRowCount');
+        const metricAnomalies = document.getElementById('metricAnomalies');
+
+        let currentFile = null;
+        let sumsChart = null;
+
+        function setTabsEnabled(enabled) {
+            tabButtons.forEach(btn => { btn.disabled = !enabled; });
+        }
+
+        function setActiveTab(name) {
+            tabButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.tab === name));
+            tabCharts.style.display = name === 'charts' ? 'block' : 'none';
+            tabPreview.style.display = name === 'preview' ? 'block' : 'none';
+        }
+
+        browseLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            fileInput.click();
+        });
+
+        dropzone.addEventListener('click', () => fileInput.click());
+        dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                currentFile = e.dataTransfer.files[0];
+                processBtn.disabled = false;
+                dropzone.querySelector('div').innerHTML = `<strong>Selected:</strong> ${currentFile.name}`;
+            }
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files[0]) {
+                currentFile = fileInput.files[0];
+                processBtn.disabled = false;
+                dropzone.querySelector('div').innerHTML = `<strong>Selected:</strong> ${currentFile.name}`;
+            }
+        });
+
+        tabButtons.forEach(btn => btn.addEventListener('click', () => setActiveTab(btn.dataset.tab)));
+
+        function refreshChartTheme() {
+            if (!sumsChart) return;
+            const axisColor = getVar('--muted') || '#94a3b8';
+            const gridColor = getVar('--border') || 'rgba(148,163,184,0.15)';
+            const barBg = (getVar('--accent') ? getVar('--accent') : 'rgba(59,130,246,1)');
+            sumsChart.options.scales.x.ticks.color = axisColor;
+            sumsChart.options.scales.y.ticks.color = axisColor;
+            sumsChart.options.scales.x.grid.color = gridColor;
+            sumsChart.options.scales.y.grid.color = gridColor;
+            sumsChart.data.datasets[0].backgroundColor = barBg + '99';
+            sumsChart.data.datasets[0].borderColor = barBg;
+            sumsChart.update();
+        }
+
+        async function processUpload() {
+            if (!currentFile) return;
+            const formData = new FormData();
+            formData.append('file', currentFile);
+
+            progress.style.display = 'block';
+            setTabsEnabled(false);
+
+            try {
+                const resp = await fetch('/upload', { method: 'POST', body: formData });
+                const data = await resp.json();
+                progress.style.display = 'none';
+                if (!resp.ok) {
+                    alert(data.error || 'Processing failed');
+                    return;
+                }
+
+                // Metrics
+                metricAccuracy.textContent = data.accuracy || '—';
+                const sums = data.column_sums || {};
+                const labels = Object.keys(sums);
+                const values = Object.values(sums);
+                metricFeatureCount.textContent = labels.length;
+                metricRowCount.textContent = (data.data_preview || '').match(/<tr>/g)?.length - 1 || '—';
+                const anomalyGuess = Math.max(0, Math.round((values.reduce((a,b)=>a+Number(b||0),0) / 1000)));
+                metricAnomalies.textContent = anomalyGuess.toString();
+                metrics.style.display = 'flex';
+
+                // Charts
+                if (sumsChart) sumsChart.destroy();
+                sumsChart = new Chart(sumsChartEl.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: 'Sum',
+                            data: values,
+                            backgroundColor: (getVar('--accent') || 'rgba(59,130,246,1)') + '99',
+                            borderColor: getVar('--accent') || 'rgba(59,130,246,1)',
+                            borderWidth: 1,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { ticks: { color: getVar('--muted') || '#94a3b8' }, grid: { color: getVar('--border') || 'rgba(148,163,184,0.15)' } },
+                            y: { ticks: { color: getVar('--muted') || '#94a3b8' }, grid: { color: getVar('--border') || 'rgba(148,163,184,0.15)' } }
+                        }
+                    }
+                });
+                refreshChartTheme();
+
+                // Images
+                importanceImg.src = `data:image/png;base64,${data.importance_plot}`;
+                heatmapImg.src = `data:image/png;base64,${data.heatmap}`;
+
+                // Preview
+                previewHtml.innerHTML = data.data_preview || '';
+                setTabsEnabled(true);
+            } catch (err) {
+                progress.style.display = 'none';
+                alert('Network error. Please try again.');
+            }
+        }
+
+        processBtn.addEventListener('click', processUpload);
+
+        // Initialize theme and toggle handler
+        setTheme(getTheme());
+        themeToggle.addEventListener('click', () => {
+            const next = (root.getAttribute('data-theme') === 'dark') ? 'light' : 'dark';
+            setTheme(next);
+            refreshChartTheme();
+        });
+    </script>
+</body>
+</html>
+
+

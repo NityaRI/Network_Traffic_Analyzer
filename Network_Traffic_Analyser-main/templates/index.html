@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature Analysis & Model Training</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+        }
+        .container {
+            margin-top: 50px;
+            padding: 20px;
+            background-color: #ffffff;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+        }
+        h1, h3 {
+            text-align: center;
+            color: #343a40;
+        }
+        #result img {
+            display: block;
+            margin: 20px auto;
+            max-width: 80%;
+        }
+        #dataPreview {
+            overflow-x: auto;
+        }
+        table {
+            margin: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Network Traffic Analysis </h1>
+        <p class="text-center">Upload a CSV file to analyze features</p>
+        <form id="uploadForm">
+            <div class="mb-3">
+                <label for="fileInput" class="form-label">Upload CSV File:</label>
+                <input type="file" class="form-control" id="fileInput" accept=".csv" required>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Upload & Process</button>
+        </form>
+
+        <div id="loading" class="text-center mt-3" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>Processing your file, please wait...</p>
+        </div>
+
+        <div id="result" style="display: none;">
+            <h3>Results</h3>
+            <p id="accuracy" class="text-center text-success"></p>
+            <h3>Column Sums</h3>
+            <table id="columnSums" class="table table-striped table-bordered"></table>
+            <h3>Visualizations</h3>
+            <img id="barPlot" alt="Feature Sums Bar Plot">
+            <img id="heatmap" alt="Correlation Heatmap">
+            <img id="importancePlot" alt="Feature Importance Plot">
+            <h3>Data Preview</h3>
+            <div id="dataPreview" class="table-responsive"></div>
+        </div>
+    </div>
+
+    <script>
+        const uploadForm = document.getElementById('uploadForm');
+        const fileInput = document.getElementById('fileInput');
+        const loadingDiv = document.getElementById('loading');
+        const resultDiv = document.getElementById('result');
+        const accuracyElem = document.getElementById('accuracy');
+        const barPlot = document.getElementById('barPlot');
+        const heatmap = document.getElementById('heatmap');
+        const importancePlot = document.getElementById('importancePlot');
+        const columnSumsTable = document.getElementById('columnSums');
+        const dataPreview = document.getElementById('dataPreview');
+
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please select a file to upload.');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            loadingDiv.style.display = 'block';
+            resultDiv.style.display = 'none';
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    loadingDiv.style.display = 'none';
+                    resultDiv.style.display = 'block';
+
+                    accuracyElem.textContent = `Accuracy: ${data.accuracy}`;
+                    barPlot.src = `data:image/png;base64,${data.bar_plot}`;
+                    heatmap.src = `data:image/png;base64,${data.heatmap}`;
+                    importancePlot.src = `data:image/png;base64,${data.importance_plot}`;
+
+                    // Populate column sums table
+                    columnSumsTable.innerHTML = '';
+                    for (const [key, value] of Object.entries(data.column_sums)) {
+                        const row = `<tr><td>${key}</td><td>${value}</td></tr>`;
+                        columnSumsTable.innerHTML += row;
+                    }
+
+                    // Populate data preview
+                    dataPreview.innerHTML = data.data_preview;
+                } else {
+                    loadingDiv.style.display = 'none';
+                    alert(data.error || 'An error occurred during file processing.');
+                }
+            } catch (error) {
+                loadingDiv.style.display = 'none';
+                alert('An error occurred. Please try again.');
+            }
+        });
+    </script>
+</body>
+</html>

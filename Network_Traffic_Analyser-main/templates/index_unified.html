@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Traffic Analysis - Unified Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --secondary: #64748b;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --dark: #1e293b;
+            --light: #f8fafc;
+            --glass: rgba(255, 255, 255, 0.1);
+            --glass-border: rgba(255, 255, 255, 0.2);
+        }
+        
+        [data-theme="dark"] {
+            --light: #0f172a;
+            --dark: #f1f5f9;
+            --glass: rgba(0, 0, 0, 0.3);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+        
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Inter', system-ui, sans-serif;
+            color: var(--dark);
+        }
+        
+        .glass-card {
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .nav-pills .nav-link {
+            border-radius: 15px;
+            margin: 0 5px;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-pills .nav-link.active {
+            background: linear-gradient(45deg, var(--primary), #3b82f6);
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+        }
+        
+        .upload-zone {
+            border: 3px dashed var(--primary);
+            border-radius: 20px;
+            padding: 3rem;
+            text-align: center;
+            background: rgba(37, 99, 235, 0.05);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .upload-zone:hover, .upload-zone.dragover {
+            background: rgba(37, 99, 235, 0.1);
+            transform: translateY(-2px);
+        }
+        
+        .metric-card {
+            background: linear-gradient(135deg, var(--primary), #3b82f6);
+            color: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+        }
+        
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            display: block;
+        }
+        
+        .metric-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(45deg, var(--primary), #3b82f6);
+            border: none;
+            border-radius: 10px;
+            padding: 0.75rem 2rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(37, 99, 235, 0.4);
+        }
+        
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .status-online { background: var(--success); }
+        .status-warning { background: var(--warning); }
+        .status-offline { background: var(--danger); }
+        
+        .tab-content {
+            background: white;
+            border-radius: 0 0 20px 20px;
+            padding: 2rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-top: 5px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="text-center text-white">
+            <div class="spinner mb-3"></div>
+            <h4>Processing Analysis...</h4>
+            <p>This may take a few minutes</p>
+        </div>
+    </div>
+
+    <div class="container-fluid py-4">
+        <!-- Header -->
+        <div class="glass-card p-4 mb-4">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1 class="display-5 fw-bold text-white mb-2">
+                        <i class="fas fa-network-wired me-3"></i>
+                        Network Traffic Analysis
+                    </h1>
+                    <p class="text-white-50 mb-0">Advanced AI-powered network security monitoring and anomaly detection</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="d-flex justify-content-end gap-2">
+                        <button class="btn btn-outline-light" id="themeToggle">
+                            <i class="fas fa-moon"></i>
+                        </button>
+                        <div class="d-flex align-items-center text-white">
+                            <span class="status-indicator status-online"></span>
+                            System Online
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="glass-card p-3 mb-4">
+            <ul class="nav nav-pills justify-content-center" id="mainTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="upload-tab" data-bs-toggle="pill" data-bs-target="#upload" type="button">
+                        <i class="fas fa-upload me-2"></i>Upload & Analyze
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="dashboard-tab" data-bs-toggle="pill" data-bs-target="#dashboard" type="button">
+                        <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="monitoring-tab" data-bs-toggle="pill" data-bs-target="#monitoring" type="button">
+                        <i class="fas fa-eye me-2"></i>Real-time Monitor
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="reports-tab" data-bs-toggle="pill" data-bs-target="#reports" type="button">
+                        <i class="fas fa-chart-line me-2"></i>Reports
+                    </button>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="mainTabContent">
+            <!-- Upload & Analyze Tab -->
+            <div class="tab-pane fade show active" id="upload" role="tabpanel">
+                <div class="row">
+                    <div class="col-lg-8">
+                        <div class="glass-card p-4 mb-4">
+                            <h3 class="mb-4"><i class="fas fa-file-upload me-2"></i>Upload Network Data</h3>
+                            
+                            <!-- File Type Selection -->
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="fileType" id="csvType" value="csv" checked>
+                                        <label class="form-check-label" for="csvType">
+                                            <i class="fas fa-file-csv text-success me-2"></i>CSV Data
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="fileType" id="pcapType" value="pcap">
+                                        <label class="form-check-label" for="pcapType">
+                                            <i class="fas fa-file-code text-primary me-2"></i>PCAP File
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Upload Zone -->
+                            <div class="upload-zone" id="uploadZone">
+                                <i class="fas fa-cloud-upload-alt fa-4x text-primary mb-3"></i>
+                                <h4>Drag & Drop Your File Here</h4>
+                                <p class="text-muted mb-3">or click to browse files</p>
+                                <p class="small text-muted" id="fileTypeInfo">Supported: CSV files (.csv)</p>
+                                <input type="file" id="fileInput" class="d-none" accept=".csv">
+                                <button type="button" class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                                    <i class="fas fa-folder-open me-2"></i>Choose File
+                                </button>
+                            </div>
+
+                            <div id="selectedFile" class="mt-3" style="display: none;">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-file-alt me-2"></i>
+                                    Selected: <span id="fileName"></span>
+                                    <button type="button" class="btn btn-success ms-3" id="analyzeBtn">
+                                        <i class="fas fa-play me-2"></i>Start Analysis
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-4">
+                        <div class="glass-card p-4">
+                            <h5 class="mb-3"><i class="fas fa-info-circle me-2"></i>Analysis Features</h5>
+                            <div class="list-group list-group-flush">
+                                <div class="list-group-item border-0 px-0">
+                                    <i class="fas fa-brain text-primary me-2"></i>
+                                    <strong>ML Anomaly Detection</strong>
+                                    <small class="d-block text-muted">Isolation Forest, SVM, DBSCAN</small>
+                                </div>
+                                <div class="list-group-item border-0 px-0">
+                                    <i class="fas fa-shield-alt text-success me-2"></i>
+                                    <strong>Threat Intelligence</strong>
+                                    <small class="d-block text-muted">IP reputation & attack patterns</small>
+                                </div>
+                                <div class="list-group-item border-0 px-0">
+                                    <i class="fas fa-chart-line text-warning me-2"></i>
+                                    <strong>Rich Visualizations</strong>
+                                    <small class="d-block text-muted">Interactive charts & topology</small>
+                                </div>
+                                <div class="list-group-item border-0 px-0">
+                                    <i class="fas fa-clock text-info me-2"></i>
+                                    <strong>Real-time Monitoring</strong>
+                                    <small class="d-block text-muted">Live traffic analysis</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard Tab -->
+            <div class="tab-pane fade" id="dashboard" role="tabpanel">
+                <div class="row mb-4" id="metricsRow" style="display: none;">
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <span class="metric-value" id="totalPackets">0</span>
+                            <span class="metric-label">Total Packets</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <span class="metric-value" id="anomalies">0</span>
+                            <span class="metric-label">Anomalies</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <span class="metric-value" id="accuracy">0%</span>
+                            <span class="metric-label">Model Accuracy</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <span class="metric-value" id="threats">0</span>
+                            <span class="metric-label">Threats Detected</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-lg-8">
+                        <div class="chart-container mb-4">
+                            <h5 class="mb-3"><i class="fas fa-chart-bar me-2"></i>Analysis Results</h5>
+                            <canvas id="mainChart" height="300"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="chart-container">
+                            <h5 class="mb-3"><i class="fas fa-exclamation-triangle me-2"></i>Security Alerts</h5>
+                            <div id="alertsList">
+                                <p class="text-muted">No alerts at this time</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="chart-container">
+                            <h5 class="mb-3"><i class="fas fa-table me-2"></i>Data Preview</h5>
+<div id="dataPreview" class="table-responsive"></div>
+                            <!-- Data Profile for generic CSV analysis -->
+                            <div id="dataProfile" class="mt-4" style="display:none;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Real-time Monitoring Tab -->
+            <div class="tab-pane fade" id="monitoring" role="tabpanel">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <h5 class="mb-3"><i class="fas fa-pulse me-2"></i>Live Traffic</h5>
+                            <canvas id="liveChart" height="200"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <h5 class="mb-3"><i class="fas fa-shield-alt me-2"></i>Threat Status</h5>
+                            <div id="threatStatus">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span>System Status</span>
+                                    <span class="badge bg-success">Secure</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span>Active Connections</span>
+                                    <span id="activeConnections">0</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span>Blocked IPs</span>
+                                    <span id="blockedIPs">0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reports Tab -->
+            <div class="tab-pane fade" id="reports" role="tabpanel">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="chart-container">
+                            <h5 class="mb-3"><i class="fas fa-download me-2"></i>Export Reports</h5>
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-primary" id="exportPdfBtn">
+                                    <i class="fas fa-file-pdf me-2"></i>PDF Report
+                                </button>
+                                <button class="btn btn-success" id="exportJsonBtn">
+                                    <i class="fas fa-file-code me-2"></i>JSON Export
+                                </button>
+                                <button class="btn btn-info" id="exportCsvBtn">
+                                    <i class="fas fa-file-csv me-2"></i>CSV Export
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="chart-container">
+                            <h5 class="mb-3"><i class="fas fa-chart-line me-2"></i>Analysis Charts</h5>
+                            <div id="reportCharts">
+                                <p class="text-muted">Upload and analyze data to view detailed reports</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Global variables
+        let currentFile = null;
+        let mainChart = null;
+        let liveChart = null;
+        let isDarkMode = false;
+
+        // Theme toggle
+        document.getElementById('themeToggle').addEventListener('click', function() {
+            isDarkMode = !isDarkMode;
+            document.body.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
+            this.innerHTML = isDarkMode ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+        });
+
+        // File type selection
+        document.querySelectorAll('input[name="fileType"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const fileInput = document.getElementById('fileInput');
+                const fileTypeInfo = document.getElementById('fileTypeInfo');
+                
+                if (this.value === 'csv') {
+                    fileInput.accept = '.csv';
+                    fileTypeInfo.textContent = 'Supported: CSV files (.csv)';
+                } else {
+                    fileInput.accept = '.pcap,.pcapng,.cap';
+                    fileTypeInfo.textContent = 'Supported: PCAP files (.pcap, .pcapng, .cap)';
+                }
+            });
+        });
+
+        // File upload handling
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        const selectedFile = document.getElementById('selectedFile');
+        const fileName = document.getElementById('fileName');
+
+        uploadZone.addEventListener('click', () => fileInput.click());
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileSelection(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelection(e.target.files[0]);
+            }
+        });
+
+        function handleFileSelection(file) {
+            currentFile = file;
+            fileName.textContent = file.name;
+            selectedFile.style.display = 'block';
+        }
+
+        // Analysis button
+        document.getElementById('analyzeBtn').addEventListener('click', async function() {
+            if (!currentFile) {
+                showNotification('Please select a file first', 'error');
+                return;
+            }
+
+            // Prevent multiple submissions
+            const analyzeBtn = this;
+            if (analyzeBtn.disabled) {
+                return;
+            }
+            analyzeBtn.disabled = true;
+            analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+
+            const fileType = document.querySelector('input[name="fileType"]:checked').value;
+            const endpoint = fileType === 'csv' ? '/upload' : '/upload_pcap';
+            
+            showLoading(true);
+            
+            try {
+                // Show progress info
+                showNotification(`Starting analysis of ${currentFile.name}...`, 'info');
+                
+                const formData = new FormData();
+                formData.append('file', currentFile);
+                
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    displayResults(result, fileType);
+                    // Switch to dashboard tab
+                    document.getElementById('dashboard-tab').click();
+                    showNotification('Analysis completed successfully!', 'success');
+                } else {
+                    throw new Error(result.error || 'Analysis failed');
+                }
+            } catch (error) {
+                console.error('Analysis error:', error);
+                showNotification('Error: ' + error.message, 'error');
+            } finally {
+                showLoading(false);
+                // Re-enable button
+                analyzeBtn.disabled = false;
+                analyzeBtn.innerHTML = '<i class="fas fa-play me-2"></i>Start Analysis';
+            }
+        });
+
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+        }
+
+        function displayResults(result, fileType) {
+            // Update metrics
+            if (fileType === 'pcap') {
+                document.getElementById('totalPackets').textContent = result.total_packets?.toLocaleString() || '0';
+                const totalAnoms = Object.values(result.anomaly_results || {}).reduce((sum, model) => sum + (model.anomalies || 0), 0);
+                document.getElementById('anomalies').textContent = totalAnoms;
+                const threatCount = (result.security_alerts && result.security_alerts.length) || (result.recommendations?.length || 0);
+                document.getElementById('threats').textContent = threatCount;
+            } else {
+                document.getElementById('totalPackets').textContent = (result.total_rows || 0).toLocaleString();
+                document.getElementById('anomalies').textContent = result.csv_anomalies ?? '0';
+                const threatCount = (result.security_alerts && result.security_alerts.length) || (result.threats_detected || 0) || 0;
+                document.getElementById('threats').textContent = threatCount;
+            }
+            
+            // Support generic CSV anomaly summary when accuracy is not present
+            const accText = result.accuracy || (result.anomaly_summary && result.anomaly_summary.anomaly_rate) || 'N/A';
+            document.getElementById('accuracy').textContent = accText;
+            document.getElementById('metricsRow').style.display = 'flex';
+
+            // Create main chart
+            if (mainChart) mainChart.destroy();
+            
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            const chartData = result.column_sums || {};
+            
+            mainChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(chartData),
+                    datasets: [{
+                        label: 'Values',
+                        data: Object.values(chartData),
+                        backgroundColor: 'rgba(37, 99, 235, 0.8)',
+                        borderColor: 'rgba(37, 99, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+
+            // Display data preview
+            if (result.data_preview) {
+                document.getElementById('dataPreview').innerHTML = result.data_preview;
+            }
+
+            // Display data profile (generic CSV and PCAP->CSV)
+            const dataProfileEl = document.getElementById('dataProfile');
+            if (result.data_profile) {
+                const profile = result.data_profile;
+                let profileHtml = '<div class="row">';
+                profileHtml += `<div class="col-md-3"><div class="metric-card"><span class="metric-value">${profile.shape ? profile.shape.rows : 'N/A'}</span><span class="metric-label">Rows</span></div></div>`;
+                profileHtml += `<div class="col-md-3"><div class="metric-card"><span class="metric-value">${profile.shape ? profile.shape.cols : 'N/A'}</span><span class="metric-label">Columns</span></div></div>`;
+                profileHtml += `<div class="col-md-3"><div class="metric-card"><span class="metric-value">${profile.memory_mb ? profile.memory_mb.toFixed(1) + 'MB' : 'N/A'}</span><span class="metric-label">Memory</span></div></div>`;
+                const totalMissing = Object.values(profile.missing || {}).reduce((a,b)=>a+b,0);
+                profileHtml += `<div class="col-md-3"><div class="metric-card"><span class="metric-value">${totalMissing}</span><span class="metric-label">Missing</span></div></div>`;
+                profileHtml += '</div>';
+                if (profile.describe_html) {
+                    profileHtml += '<div class="mt-3">' + profile.describe_html + '</div>';
+                }
+                dataProfileEl.innerHTML = profileHtml;
+                dataProfileEl.style.display = 'block';
+            } else {
+                dataProfileEl.style.display = 'none';
+            }
+
+            // Display charts in reports
+            if (result.importance_plot || result.heatmap) {
+                let reportHtml = '';
+                if (result.importance_plot) {
+                    reportHtml += `<img src="data:image/png;base64,${result.importance_plot}" class="img-fluid mb-3" alt="Feature Importance">`;
+                }
+                if (result.heatmap) {
+                    reportHtml += `<img src="data:image/png;base64,${result.heatmap}" class="img-fluid" alt="Correlation Heatmap">`;
+                }
+                document.getElementById('reportCharts').innerHTML = reportHtml;
+            }
+
+            // Render security alerts
+            const alertsList = document.getElementById('alertsList');
+            const alerts = result.security_alerts || [];
+            if (alerts.length === 0) {
+                alertsList.innerHTML = '<p class="text-muted">No alerts at this time</p>';
+            } else {
+                let html = '';
+                alerts.forEach(a => {
+                    const badge = a.severity === 'high' ? 'danger' : (a.severity === 'medium' ? 'warning' : 'secondary');
+                    html += `<div class="alert alert-${badge} mb-2"><strong>${a.title || 'Security Alert'}</strong><br><small>${a.details || ''}</small></div>`;
+                });
+                alertsList.innerHTML = html;
+            }
+        }
+
+        // Initialize live monitoring chart
+        function initLiveChart() {
+            const ctx = document.getElementById('liveChart').getContext('2d');
+            liveChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Packets/sec',
+                        data: [],
+                        borderColor: 'rgba(16, 185, 129, 1)',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: { beginAtZero: true }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        // Simulate live data updates
+        function updateLiveData() {
+            if (liveChart) {
+                const now = new Date().toLocaleTimeString();
+                const value = Math.floor(Math.random() * 100) + 50;
+                
+                liveChart.data.labels.push(now);
+                liveChart.data.datasets[0].data.push(value);
+                
+                if (liveChart.data.labels.length > 20) {
+                    liveChart.data.labels.shift();
+                    liveChart.data.datasets[0].data.shift();
+                }
+                
+                liveChart.update('none');
+            }
+        }
+
+        // Export functionality
+        document.getElementById('exportPdfBtn').addEventListener('click', function() {
+            exportData('/export/pdf', 'PDF Report');
+        });
+        
+        document.getElementById('exportJsonBtn').addEventListener('click', function() {
+            exportData('/export/json', 'JSON Export');
+        });
+        
+        document.getElementById('exportCsvBtn').addEventListener('click', function() {
+            exportData('/export/csv', 'CSV Export');
+        });
+        
+        async function exportData(endpoint, exportType) {
+            try {
+                showLoading(true);
+                
+                const response = await fetch(endpoint, {
+                    method: 'GET'
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `${exportType} failed`);
+                }
+                
+                // Get filename from Content-Disposition header or use default
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = 'network_analysis_export';
+                if (contentDisposition) {
+                    const match = contentDisposition.match(/filename=([^;]+)/);
+                    if (match) {
+                        filename = match[1].replace(/"/g, '');
+                    }
+                }
+                
+                // Create blob and download
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                // Show success message
+                showNotification(`${exportType} downloaded successfully!`, 'success');
+                
+            } catch (error) {
+                console.error('Export failed:', error);
+                showNotification(`${exportType} failed: ${error.message}`, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        function showNotification(message, type = 'info') {
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `alert alert-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'info'} alert-dismissible fade show position-fixed`;
+            notification.style.top = '20px';
+            notification.style.right = '20px';
+            notification.style.zIndex = '10000';
+            notification.style.minWidth = '300px';
+            notification.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 5000);
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            initLiveChart();
+            setInterval(updateLiveData, 2000);
+        });
+    </script>
+</body>
+</html>
+
