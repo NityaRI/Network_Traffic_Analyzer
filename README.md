@@ -101,4 +101,10 @@ If you encounter any issues:
 2.  Ensure all optional dependencies for enhanced PCAP features are installed.
 3.  Verify that your hardware supports the memory-intensive ML training for very large datasets.
 
-**Developed with ❤️ by [Your Name/GitHub Profile]**
+## 🤝 Contributors
+
+- **Nitya R I** - *Lead Developer & Researcher*
+
+---
+
+**Developed with ❤️ by [Nitya R I](https://github.com/NityaRI)**
